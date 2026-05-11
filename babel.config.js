@@ -6,8 +6,7 @@ module.exports = function (api) {
       ["babel-preset-expo", { jsxImportSource: "nativewind" }],
     ],
     plugins: [
-      // NativeWind babel plugin for className support
-      "nativewind/babel",
+      // NativeWind babel plugin for className support (web doesn't need this)
     ],
   };
 };
