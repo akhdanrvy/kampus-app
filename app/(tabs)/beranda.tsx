@@ -4,26 +4,27 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  ActivityIndicator,
 } from "react-native";
 import { useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import { useProfile } from "@hooks/useProfile";
 import { useLatestNews } from "@hooks/useNews";
+import { useEvents } from "@hooks/useEvents";
 import { ECard } from "@components/home/ECard";
 import { QuickActions } from "@components/home/QuickActions";
 import { BannerCarousel } from "@components/home/BannerCarousel";
 import { NewsPreview } from "@components/home/NewsPreview";
 import { SkeletonBox, SkeletonText } from "@components/ui/Skeleton";
 import { Colors } from "@constants/colors";
-import { profileKeys, newsKeys } from "@constants/queryKeys";
-import { generateInitials } from "@lib/utils";
+import { profileKeys, newsKeys, eventKeys } from "@constants/queryKeys";
+import { generateInitials, formatDate, formatTime } from "@lib/utils";
 
 // ---------------------------------------------------------------------------
-// Header skeleton while profile is loading
+// Skeleton loaders
 // ---------------------------------------------------------------------------
 
 function HeaderSkeleton() {
@@ -38,10 +39,6 @@ function HeaderSkeleton() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// E-Card skeleton
-// ---------------------------------------------------------------------------
-
 function ECardSkeleton() {
   return (
     <SkeletonBox
@@ -53,34 +50,80 @@ function ECardSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Screen
+// EventCard — single upcoming event row
 // ---------------------------------------------------------------------------
 
-/**
- * BerandaScreen — main home screen.
- *
- * Menggunakan RefreshControl pada ScrollView agar user bisa pull-to-refresh
- * tanpa harus menutup dan membuka ulang aplikasi. Invalidasi query TanStack
- * Query memicu re-fetch otomatis semua data di halaman ini.
- */
+function EventCard({ event }: { event: import("../../types/index").EventItem }) {
+  return (
+    <View
+      style={{
+        backgroundColor: Colors.white,
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        flexDirection: "row",
+        gap: 12,
+        alignItems: "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          backgroundColor: "#EFF6FF",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Ionicons name="calendar-outline" size={24} color={Colors.primaryLight} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{ fontSize: 13, fontWeight: "600", color: Colors.textPrimary, lineHeight: 18 }}
+          numberOfLines={2}
+        >
+          {event.title}
+        </Text>
+        {event.location && (
+          <Text style={{ fontSize: 11, color: Colors.textMuted, marginTop: 2 }} numberOfLines={1}>
+            <Ionicons name="location-outline" size={11} /> {event.location}
+          </Text>
+        )}
+        <Text style={{ fontSize: 11, color: Colors.primaryLight, marginTop: 3, fontWeight: "500" }}>
+          {formatDate(event.event_date)} · {formatTime(event.event_date)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BerandaScreen
+// ---------------------------------------------------------------------------
+
 export default function BerandaScreen() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: latestNews = [], isLoading: newsLoading } = useLatestNews(3);
+  const { data: events = [], isLoading: eventsLoading } = useEvents();
 
-  // Pull-to-refresh: invalidate both profile and news queries
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
       qc.invalidateQueries({ queryKey: profileKeys.me() }),
       qc.invalidateQueries({ queryKey: newsKeys.lists() }),
+      qc.invalidateQueries({ queryKey: eventKeys.lists() }),
     ]);
     setRefreshing(false);
   }, [qc]);
 
-  // Build avatar initials from name
   const initials = profile ? generateInitials(profile.full_name) : "?";
 
   return (
@@ -110,25 +153,11 @@ export default function BerandaScreen() {
           {profileLoading ? (
             <HeaderSkeleton />
           ) : (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              {/* Greeting text */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <View>
-                <Text style={{ fontSize: 13, color: Colors.textMuted }}>
-                  Halo 👋
-                </Text>
+                <Text style={{ fontSize: 13, color: Colors.textMuted }}>Halo 👋</Text>
                 <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "700",
-                    color: Colors.textPrimary,
-                    marginTop: 1,
-                  }}
+                  style={{ fontSize: 18, fontWeight: "700", color: Colors.textPrimary, marginTop: 1 }}
                   numberOfLines={1}
                 >
                   {profile?.full_name ?? "Mahasiswa"}
@@ -141,9 +170,7 @@ export default function BerandaScreen() {
                 )}
               </View>
 
-              {/* Right icons — notification + avatar */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                {/* Notification bell — placeholder for Phase 5 */}
                 <TouchableOpacity
                   style={{
                     width: 38,
@@ -159,7 +186,6 @@ export default function BerandaScreen() {
                   <Ionicons name="notifications-outline" size={20} color={Colors.textPrimary} />
                 </TouchableOpacity>
 
-                {/* Avatar initials circle */}
                 <View
                   style={{
                     width: 38,
@@ -199,6 +225,46 @@ export default function BerandaScreen() {
         {/* ── Banner Carousel ── */}
         <View style={{ paddingHorizontal: 16, paddingTop: 24 }}>
           <BannerCarousel />
+        </View>
+
+        {/* ── Upcoming Events ── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 24 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "700", color: Colors.textPrimary }}>
+              Event Mendatang
+            </Text>
+          </View>
+
+          {eventsLoading ? (
+            <>
+              <SkeletonBox height={76} borderRadius={14} style={{ marginBottom: 10 }} />
+              <SkeletonBox height={76} borderRadius={14} style={{ marginBottom: 10 }} />
+            </>
+          ) : events.length === 0 ? (
+            <View
+              style={{
+                padding: 20,
+                alignItems: "center",
+                backgroundColor: Colors.white,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: Colors.border,
+              }}
+            >
+              <Text style={{ color: Colors.textMuted, fontSize: 13 }}>
+                Belum ada event mendatang.
+              </Text>
+            </View>
+          ) : (
+            events.slice(0, 3).map((ev) => <EventCard key={ev.id} event={ev} />)
+          )}
         </View>
 
         {/* ── News Preview ── */}

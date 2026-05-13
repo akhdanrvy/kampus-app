@@ -1,11 +1,20 @@
 import { useRouter } from "expo-router";
-import { useMutation } from "@tanstack/react-query";
-import { Alert } from "react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Alert, Platform } from "react-native";
 
 import { supabase } from "@lib/supabase";
 import { storage } from "@lib/mmkv";
 import { useAuthStore } from "@stores/authStore";
 import { queryClient } from "@lib/queryClient";
+
+/** Cross-platform alert — uses Alert.alert on native, window.alert on web */
+function showAlert(title: string, message: string) {
+  if (Platform.OS === "web") {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,12 +84,12 @@ export function useAuth() {
       const role =
         (data.user?.user_metadata?.role as string) ?? "student";
       handleAuthSuccess(data.user.id, role, setAuth);
-      // Cache user id for MMKV rehydration
+      // Cache minimal user info — redirect dilakukan oleh auth guard di _layout.tsx
+      // yang bereaksi terhadap perubahan isAuthenticated via onAuthStateChange
       storage.set("user_profile", { id: data.user.id, role });
-      router.replace("/(tabs)/beranda");
     },
     onError: (error: Error) => {
-      Alert.alert("Login Gagal", error.message);
+      showAlert("Login Gagal", error.message);
     },
   });
 
@@ -121,7 +130,7 @@ export function useAuth() {
       return data;
     },
     onError: (error: Error) => {
-      Alert.alert("Registrasi Gagal", error.message);
+      showAlert("Registrasi Gagal", error.message);
     },
     // onSuccess is handled by the screen to show the success modal
   });
@@ -142,7 +151,7 @@ export function useAuth() {
       return data;
     },
     onError: (error: Error) => {
-      Alert.alert("Google Login Gagal", error.message);
+      showAlert("Google Login Gagal", error.message);
     },
   });
 
@@ -177,7 +186,7 @@ export function useAuth() {
       if (error) throw error;
     },
     onError: (error: Error) => {
-      Alert.alert("Gagal Mengirim Email", error.message);
+      showAlert("Gagal Mengirim Email", error.message);
     },
   });
 
@@ -198,4 +207,38 @@ export function useAuth() {
     resetPassword,
     getCurrentUser,
   };
+}
+
+// ---------------------------------------------------------------------------
+// useSignOut — standalone hook agar bisa dipakai tanpa useAuth() penuh.
+//
+// Memastikan urutan cleanup: Supabase → Zustand → TanStack Query → MMKV → redirect.
+// Bahkan jika Supabase signOut error, state lokal tetap dibersihkan agar
+// user tidak terjebak di dalam app.
+// ---------------------------------------------------------------------------
+
+export function useSignOut() {
+  const qc = useQueryClient();
+  const router = useRouter();
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      clearAuth();
+      qc.clear();
+      storage.delete("user_profile");
+      router.replace("/(auth)/login");
+    },
+    onError: () => {
+      // Force logout meski Supabase error — jangan biarkan user terjebak
+      clearAuth();
+      qc.clear();
+      storage.delete("user_profile");
+      router.replace("/(auth)/login");
+    },
+  });
 }

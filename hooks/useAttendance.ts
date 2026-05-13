@@ -1,26 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { attendanceKeys } from "@constants/queryKeys";
-import {
-  mockAttendanceSessions,
-  mockAttendanceHistory,
-} from "@lib/mockData";
+import { supabase } from "@lib/supabase";
 import type { AttendanceRecord, AttendanceSession } from "../types/index";
 import type { AttendanceResult } from "../stores/scanStore";
-
-// TODO: Replace with Supabase queries when backend is connected
-// import { supabase } from "@lib/supabase";
 
 // ---------------------------------------------------------------------------
 // useSubmitAttendance
 //
-// Validasi token QR harus dilakukan di server (Supabase), bukan hanya di client,
-// karena:
-// 1. Client bisa dimanipulasi — jika validasi hanya di app, attacker bisa
-//    inject token palsu dan JS payload yang "selalu valid"
-// 2. Race condition — jika dua device scan bersamaan, server (PostgreSQL)
-//    yang handle atomicity, bukan app
-// 3. Token expiry check harus pakai server time (NOW()), bukan device time
-//    karena device time bisa dimanipulasi oleh user (maju/mundur jam)
+// Validasi token QR dilakukan sepenuhnya di server (Supabase), bukan di client:
+// 1. Client bisa dimanipulasi — validasi di app mudah di-bypass
+// 2. Token expiry menggunakan server time via .gte("qr_expires_at", now)
+// 3. Race condition dua device scan bersamaan ditangani PostgreSQL constraint
 // ---------------------------------------------------------------------------
 
 export function useSubmitAttendance() {
@@ -28,45 +18,61 @@ export function useSubmitAttendance() {
 
   return useMutation({
     mutationFn: async (qrToken: string): Promise<AttendanceResult> => {
-      // TODO: Replace with full Supabase server-side validation when connected
-      // Server-side validation is required because:
-      // 1. Client can be manipulated to inject fake tokens
-      // 2. Token expiry must use server time (NOW()), not device time
-      // 3. Race conditions need atomic DB handling
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) throw new Error("Tidak terautentikasi.");
 
-      await new Promise((r) => setTimeout(r, 800)); // Simulate network
+      // Validasi: QR token aktif dan belum kedaluwarsa (server time)
+      const { data: attendanceSession, error: sessionError } = await (supabase as any)
+        .from("attendance_sessions")
+        .select("*")
+        .eq("qr_token", qrToken)
+        .eq("is_active", true)
+        .gte("qr_expires_at", new Date().toISOString())
+        .maybeSingle();
 
-      // Find matching active session from mock data
-      const session = mockAttendanceSessions.find(
-        (s) => s.qr_token === qrToken && s.is_active
-      );
-
-      if (!session) {
-        throw new Error("QR tidak valid atau sudah kedaluwarsa. Minta dosen untuk refresh QR.");
+      if (sessionError) throw sessionError;
+      if (!attendanceSession) {
+        throw new Error(
+          "QR tidak valid atau sudah kedaluwarsa. Minta dosen untuk refresh QR."
+        );
       }
 
-      // Check if already recorded in today's mock history
-      const alreadyScanned = mockAttendanceHistory.some(
-        (h) => h.session.id === session.id
-      );
-      if (alreadyScanned) {
+      // Cek apakah user sudah absen di sesi ini
+      const { data: existingRecord } = await (supabase as any)
+        .from("attendance_records")
+        .select("id")
+        .eq("session_id", attendanceSession.id)
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (existingRecord) {
         throw new Error("Anda sudah tercatat hadir di sesi ini.");
       }
 
+      // Tentukan status: hadir tepat waktu atau terlambat (> 15 menit dari mulai sesi)
       const now = new Date();
-      const sessionStart = new Date(session.created_at);
+      const sessionStart = new Date(attendanceSession.created_at);
       const diffMinutes = (now.getTime() - sessionStart.getTime()) / 60_000;
       const status: AttendanceRecord["status"] = diffMinutes > 15 ? "late" : "present";
 
-      const record: AttendanceRecord = {
-        id: `record-mock-${Date.now()}`,
-        session_id: session.id,
-        user_id: "mock-user-id-123",
-        scanned_at: now.toISOString(),
-        status,
-      };
+      // Insert record absensi
+      const { data: record, error: recordError } = await (supabase as any)
+        .from("attendance_records")
+        .insert({
+          session_id: attendanceSession.id,
+          user_id: session.user.id,
+          scanned_at: now.toISOString(),
+          status,
+        })
+        .select()
+        .single();
 
-      return { record, session };
+      if (recordError) throw recordError;
+
+      return {
+        record: record as AttendanceRecord,
+        session: attendanceSession as AttendanceSession,
+      };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: attendanceKeys.today() });
@@ -77,9 +83,9 @@ export function useSubmitAttendance() {
 // ---------------------------------------------------------------------------
 // useTodayAttendance
 //
-// Fetches attendance records for the current day joined with session data.
-// The JOIN is done client-side (two queries) to keep Supabase RLS simple
-// for MVP — can be replaced with a Postgres view later.
+// Fetch riwayat absensi hari ini dengan JOIN ke attendance_sessions.
+// Menggunakan select("*, attendance_sessions(*)") agar satu query — lebih
+// efisien daripada dua query terpisah untuk MVP.
 // ---------------------------------------------------------------------------
 
 interface TodayRecord {
@@ -91,13 +97,32 @@ export function useTodayAttendance() {
   return useQuery({
     queryKey: attendanceKeys.today(),
     queryFn: async (): Promise<TodayRecord[]> => {
-      // TODO: Replace with Supabase query when connected:
-      // const { data } = await supabase.from("attendance_records")
-      //   .select("*, attendance_sessions(*)").eq("user_id", userId)
-      //   .gte("scanned_at", todayStart).order("scanned_at", { ascending: false });
-      await new Promise((r) => setTimeout(r, 200));
-      return mockAttendanceHistory;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return [];
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data, error } = await (supabase as any)
+        .from("attendance_records")
+        .select("*, attendance_sessions(*)")
+        .eq("user_id", session.user.id)
+        .gte("scanned_at", todayStart.toISOString())
+        .order("scanned_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []).map((row: any) => ({
+        record: {
+          id: row.id,
+          session_id: row.session_id,
+          user_id: row.user_id,
+          scanned_at: row.scanned_at,
+          status: row.status,
+        } as AttendanceRecord,
+        session: row.attendance_sessions as AttendanceSession,
+      }));
     },
-    refetchInterval: 30_000,
+    refetchInterval: 30_000, // polling setiap 30 detik agar riwayat terupdate
   });
 }

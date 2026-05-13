@@ -8,33 +8,40 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 
 import { useProfile, useUpdateProfile } from "@hooks/useProfile";
 import { Input } from "@components/ui/Input";
 import { Button } from "@components/ui/Button";
 import { Colors } from "@constants/colors";
 import { generateInitials } from "@lib/utils";
+import { supabase } from "@lib/supabase";
 
 // ---------------------------------------------------------------------------
 // EditProfilScreen
 //
-// Only editable fields: full_name and phone.
-// NIM, email, prodi, angkatan are readonly (must be changed by admin).
-// Avatar upload placeholder — expo-image-picker integration in a later phase.
+// Field yang bisa diubah: full_name, phone, avatar.
+// NIM, email, prodi, angkatan hanya bisa diubah oleh admin.
+//
+// Upload avatar dilakukan saat tombol Simpan ditekan (bukan langsung saat
+// foto dipilih) — menghindari upload yang terbuang jika user batal.
 // ---------------------------------------------------------------------------
 
 export default function EditProfilScreen() {
   const { data: profile, isLoading } = useProfile();
-  const updateProfile = useUpdateProfile();
+  const { mutate: updateProfile, isPending } = useUpdateProfile();
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [newAvatarUri, setNewAvatarUri] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  // Sync form values when profile loads
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name ?? "");
@@ -42,35 +49,111 @@ export default function EditProfilScreen() {
     }
   }, [profile]);
 
-  const handleSave = () => {
+  // ── Pilih foto dari galeri ─────────────────────────────────────────────────
+
+  const handlePickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Izin Diperlukan", "Akses galeri diperlukan untuk mengganti foto profil.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+    // Simpan URI lokal — upload baru terjadi saat user tekan Simpan
+    setNewAvatarUri(result.assets[0].uri);
+  };
+
+  // ── Upload foto ke Supabase Storage ───────────────────────────────────────
+
+  const uploadAvatar = async (uri: string): Promise<string> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("User tidak terautentikasi");
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    // Tentukan ekstensi dari URI; default ke jpg
+    const ext = uri.split(".").pop()?.toLowerCase().replace(/\?.*$/, "") ?? "jpg";
+    const contentType = ext === "png" ? "image/png" : "image/jpeg";
+
+    // Path: <user_id>/avatar-<timestamp>.<ext> — pakai subfolder per user
+    // agar Storage policy bisa di-scope ke auth.uid()
+    const fileName = `${user.id}/avatar-${Date.now()}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from("avatars")
+      .upload(fileName, blob, { contentType, upsert: true });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(data.path);
+
+    return publicUrl;
+  };
+
+  // ── Simpan semua perubahan ─────────────────────────────────────────────────
+
+  const handleSave = async () => {
     if (!fullName.trim()) {
       Alert.alert("Validasi", "Nama tidak boleh kosong.");
       return;
     }
 
-    updateProfile.mutate(
-      { full_name: fullName.trim(), phone: phone.trim() },
-      {
-        onSuccess: () => {
-          Alert.alert("Berhasil", "Profil berhasil diperbarui.", [
-            { text: "OK", onPress: () => router.back() },
-          ]);
-        },
-        onError: (err) => {
-          Alert.alert(
-            "Gagal",
-            err instanceof Error ? err.message : "Terjadi kesalahan."
-          );
-        },
+    try {
+      let avatarUrl = profile?.avatar_url;
+
+      // Upload foto baru jika user memilih foto berbeda
+      if (newAvatarUri) {
+        setIsUploading(true);
+        avatarUrl = await uploadAvatar(newAvatarUri);
+        setIsUploading(false);
       }
-    );
+
+      updateProfile(
+        {
+          full_name: fullName.trim(),
+          phone: phone.trim(),
+          ...(avatarUrl !== profile?.avatar_url && { avatar_url: avatarUrl }),
+        },
+        {
+          onSuccess: () => {
+            Alert.alert("Berhasil", "Profil berhasil diperbarui.", [
+              { text: "OK", onPress: () => router.back() },
+            ]);
+          },
+          onError: (err) => {
+            Alert.alert(
+              "Gagal",
+              err instanceof Error ? err.message : "Gagal menyimpan perubahan. Coba lagi."
+            );
+          },
+        }
+      );
+    } catch (err) {
+      setIsUploading(false);
+      Alert.alert(
+        "Upload Gagal",
+        err instanceof Error ? err.message : "Tidak dapat mengupload foto."
+      );
+    }
   };
 
   const initials = profile ? generateInitials(profile.full_name) : "?";
+  // Tampilkan preview foto baru (belum diupload) atau foto dari profil
+  const avatarSource = newAvatarUri ?? profile?.avatar_url;
+  const isBusy = isPending || isUploading;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      {/* Back header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -90,21 +173,38 @@ export default function EditProfilScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          {/* Avatar placeholder */}
+          {/* Avatar */}
           <View style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-            <TouchableOpacity style={styles.changePhotoBtn}>
-              <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-              <Text style={styles.changePhotoLabel}>Ganti Foto</Text>
+            <TouchableOpacity
+              onPress={handlePickAvatar}
+              disabled={isBusy}
+              activeOpacity={0.8}
+            >
+              {avatarSource ? (
+                <Image source={{ uri: avatarSource }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
+              )}
+              <View style={styles.cameraOverlay}>
+                {isUploading ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Ionicons name="camera" size={14} color={Colors.white} />
+                )}
+              </View>
             </TouchableOpacity>
             <Text style={styles.avatarNote}>
-              Fitur upload foto akan tersedia di pembaruan berikutnya.
+              {isUploading
+                ? "Mengupload foto..."
+                : newAvatarUri
+                ? "Foto baru dipilih — tekan Simpan untuk menyimpan"
+                : "Tap foto untuk mengganti"}
             </Text>
           </View>
 
-          {/* Editable fields */}
+          {/* Field yang bisa diubah */}
           <View style={styles.fieldGroup}>
             <Text style={styles.groupLabel}>Informasi yang dapat diubah</Text>
 
@@ -127,7 +227,7 @@ export default function EditProfilScreen() {
             />
           </View>
 
-          {/* Readonly fields */}
+          {/* Field readonly */}
           <View style={styles.fieldGroup}>
             <Text style={styles.groupLabel}>
               Informasi yang tidak dapat diubah sendiri
@@ -142,13 +242,12 @@ export default function EditProfilScreen() {
             />
           </View>
 
-          {/* Save button */}
           <View style={{ marginTop: 8 }}>
             <Button
-              title="Simpan Perubahan"
+              title={isUploading ? "Mengupload foto..." : "Simpan Perubahan"}
               variant="primary"
               onPress={handleSave}
-              loading={updateProfile.isPending}
+              loading={isBusy}
             />
           </View>
         </ScrollView>
@@ -198,10 +297,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     gap: 20,
   },
-  avatarSection: {
-    alignItems: "center",
-    gap: 10,
-  },
+  avatarSection: { alignItems: "center", gap: 10 },
   avatar: {
     width: 88,
     height: 88,
@@ -210,34 +306,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: Colors.white,
-  },
-  changePhotoBtn: {
-    flexDirection: "row",
+  avatarImage: { width: 88, height: 88, borderRadius: 44 },
+  avatarText: { fontSize: 28, fontWeight: "800", color: Colors.white },
+  cameraOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: Colors.white,
   },
-  changePhotoLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-  avatarNote: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    textAlign: "center",
-  },
-  fieldGroup: {
-    gap: 12,
-  },
+  avatarNote: { fontSize: 11, color: Colors.textMuted, textAlign: "center" },
+  fieldGroup: { gap: 12 },
   groupLabel: {
     fontSize: 12,
     fontWeight: "600",
@@ -253,11 +338,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  readonlyLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginBottom: 2,
-  },
+  readonlyLabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 2 },
   readonlyValue: {
     fontSize: 14,
     fontWeight: "500",

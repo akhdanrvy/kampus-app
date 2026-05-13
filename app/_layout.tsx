@@ -12,51 +12,33 @@ import { Colors } from "@constants/colors";
 import { ToastContainer } from "@components/ui/ToastContainer";
 import { OfflineBanner } from "@components/ui/OfflineBanner";
 import { ErrorBoundary } from "@components/ui/ErrorBoundary";
-
-// TODO: Re-enable Supabase auth check when backend is connected
-// import { supabase } from "@lib/supabase";
-
-// ---------------------------------------------------------------------------
-// Mock session — inject a pre-authenticated state so all screens are accessible
-// without a real Supabase connection.
-// TODO: Remove this block and uncomment the Supabase session check below
-// ---------------------------------------------------------------------------
-const MOCK_SESSION = {
-  isAuthenticated: true,
-  userId: "mock-user-id-123",
-  userRole: "student",
-} as const;
+import { supabase } from "@lib/supabase";
 
 // Root layout — wraps every screen with global providers.
 // Auth redirect logic lives here so it applies to all routes.
 export default function RootLayout() {
-  const { isAuthenticated, setAuth } = useAuthStore();
+  const { isAuthenticated, setAuth, clearAuth } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // TODO: Replace this mock session with the Supabase auth check below
-    //       when the backend is connected:
-    //
-    // rehydrate();
-    // supabase.auth.getSession().then(({ data: { session } }) => {
-    //   if (session?.user) {
-    //     setAuth(session.user.id, session.user.user_metadata?.role ?? "student");
-    //   } else {
-    //     clearAuth();
-    //   }
-    //   setIsReady(true);
-    // });
-    // const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-    //   if (session?.user) setAuth(session.user.id, session.user.user_metadata?.role ?? "student");
-    //   else clearAuth();
-    // });
-    // return () => subscription.unsubscribe();
+    // onAuthStateChange di Supabase v2 selalu fire INITIAL_SESSION saat startup
+    // — gunakan ini sebagai satu-satunya source of truth, tidak perlu getSession() terpisah.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setAuth(session.user.id, session.user.user_metadata?.role ?? "student");
+      } else {
+        clearAuth();
+      }
 
-    // Inject mock session — bypasses login screen for UI development
-    setAuth(MOCK_SESSION.userId, MOCK_SESSION.userRole);
-    setIsReady(true);
+      // Tandai app siap setelah session pertama diketahui (INITIAL_SESSION atau SIGNED_IN)
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        setIsReady(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Redirect guard

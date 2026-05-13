@@ -1,7 +1,8 @@
-import { Redirect } from 'expo-router'
+import { View } from "react-native";
 
+// index.tsx — titik masuk awal app.
+// Tidak melakukan redirect manual di sini; biarkan redirect guard
+// di app/_layout.tsx yang mengatur navigasi berdasarkan status auth.
 export default function Index() {
-  // TODO: Replace with Supabase auth check
-  // Sementara langsung redirect ke tabs karena pakai mock data
-  return <Redirect href="/(tabs)/beranda" />
-}
+  return <View />;
+}

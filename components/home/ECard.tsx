@@ -32,7 +32,8 @@ const CARD_HEIGHT = 188;
  * premium dan mudah dibaca. Ini juga membantu mahasiswa menghafal NIM mereka
  * secara visual per-blok, bukan sebagai satu string panjang.
  */
-function formatNIM(nim: string): string {
+function formatNIM(nim: string | null | undefined): string {
+  if (!nim) return "— — — —";
   return nim.replace(/(.{4})/g, "$1 ").trim();
 }
 
@@ -171,7 +172,7 @@ export function ECard({ profile, onPressQR }: ECardProps) {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{ color: Colors.white, fontSize: 14, fontWeight: "700", letterSpacing: 0.5 }}>
-              {profile.full_name.toUpperCase()}
+              {(profile.full_name ?? "Mahasiswa").toUpperCase()}
             </Text>
             <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 3 }}>
               {profile.major ?? "Program Studi"}

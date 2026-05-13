@@ -1,56 +1,78 @@
-import { createMMKV } from "react-native-mmkv";
-import type { MMKV } from "react-native-mmkv";
+import { Platform } from "react-native";
 
-// Single MMKV instance for the app — fast synchronous key-value storage
-// Used for caching non-sensitive data like E-Card, preferences, etc.
-// react-native-mmkv v4 uses createMMKV() factory instead of new MMKV()
-export const mmkvInstance: MMKV = createMMKV({ id: "kampus-app-storage" });
+// ---------------------------------------------------------------------------
+// Platform-aware storage
+// react-native-mmkv does NOT support web — falls back to localStorage on web.
+// The API surface is kept identical so call sites don't need to change.
+// ---------------------------------------------------------------------------
 
-// Typed helper wrapper around MMKV for consistent API
-export const storage = {
-  /**
-   * Persist a value (string, number, boolean, or object serialized as JSON).
-   */
+// ── Native (iOS / Android) ──────────────────────────────────────────────────
+let mmkvInstance: import("react-native-mmkv").MMKV | null = null;
+
+if (Platform.OS !== "web") {
+  // Dynamic require so the web bundle never attempts to load the native module
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { createMMKV } = require("react-native-mmkv");
+  mmkvInstance = createMMKV({ id: "kampus-app-storage" });
+}
+
+export { mmkvInstance };
+
+// ── Web (localStorage) ──────────────────────────────────────────────────────
+const webStorage = {
   set: (key: string, value: string | number | boolean | object): void => {
-    if (typeof value === "object") {
-      mmkvInstance.set(key, JSON.stringify(value));
-    } else {
-      mmkvInstance.set(key, value as string | number | boolean);
-    }
+    const serialized =
+      typeof value === "object" ? JSON.stringify(value) : String(value);
+    localStorage.setItem(key, serialized);
   },
-
-  /**
-   * Retrieve a stored value. Returns null when the key does not exist.
-   * Automatically deserializes JSON objects.
-   */
   get: <T = string>(key: string): T | null => {
-    const value = mmkvInstance.getString(key);
-    if (value === undefined) return null;
+    const value = localStorage.getItem(key);
+    if (value === null) return null;
     try {
       return JSON.parse(value) as T;
     } catch {
       return value as unknown as T;
     }
   },
-
-  /**
-   * Remove a key from storage.
-   */
   delete: (key: string): void => {
-    mmkvInstance.remove(key);
+    localStorage.removeItem(key);
   },
-
-  /**
-   * Check whether a key exists.
-   */
   contains: (key: string): boolean => {
-    return mmkvInstance.contains(key);
+    return localStorage.getItem(key) !== null;
   },
-
-  /**
-   * Clear all keys — use only during logout / reset.
-   */
   clearAll: (): void => {
-    mmkvInstance.clearAll();
+    localStorage.clear();
   },
 };
+
+// ── Unified storage export ──────────────────────────────────────────────────
+export const storage = Platform.OS === "web"
+  ? webStorage
+  : {
+      set: (key: string, value: string | number | boolean | object): void => {
+        if (typeof value === "object") {
+          mmkvInstance!.set(key, JSON.stringify(value));
+        } else {
+          mmkvInstance!.set(key, value as string | number | boolean);
+        }
+      },
+      get: <T = string>(key: string): T | null => {
+        const value = mmkvInstance!.getString(key);
+        if (value === undefined) return null;
+        try {
+          return JSON.parse(value) as T;
+        } catch {
+          return value as unknown as T;
+        }
+      },
+      delete: (key: string): void => {
+        mmkvInstance!.remove(key);
+      },
+      contains: (key: string): boolean => {
+        return mmkvInstance!.contains(key);
+      },
+      clearAll: (): void => {
+        mmkvInstance!.clearAll();
+      },
+    };
+

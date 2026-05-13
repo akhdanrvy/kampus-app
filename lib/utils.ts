@@ -42,7 +42,8 @@ export const getDayName = (dayOfWeek: number): string => {
  * Generate initials from a full name.
  * Example: "Akbar Himawan" → "AH", "Budi" → "B"
  */
-export const generateInitials = (name: string): string => {
+export const generateInitials = (name: string | null | undefined): string => {
+  if (!name) return "?";
   return name
     .trim()
     .split(/\s+/)

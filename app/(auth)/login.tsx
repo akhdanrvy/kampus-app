@@ -76,13 +76,16 @@ export default function LoginScreen() {
   };
 
   return (
-    // Dismiss keyboard when tapping outside inputs
-    <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+    // Dismiss keyboard when tapping outside inputs (native only — web tidak perlu)
+    <Pressable
+      style={{ flex: 1 }}
+      onPress={Platform.OS !== "web" ? Keyboard.dismiss : undefined}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
-        {/* KeyboardAvoidingView — 'padding' pada iOS menggeser konten ke atas */}
+        {/* KeyboardAvoidingView — dinonaktifkan di web karena tidak relevan */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
         >
           <ScrollView
             contentContainerStyle={{ flexGrow: 1 }}
@@ -236,9 +239,14 @@ export default function LoginScreen() {
                   </Text>
                 }
               />
+              <View
+                style={{
+                  marginTop: 20,
+                }}
+              ></View>
 
               {/* Register link */}
-              <View
+              {/* <View
                 style={{
                   flexDirection: "row",
                   justifyContent: "center",
@@ -255,7 +263,7 @@ export default function LoginScreen() {
                     Daftar Sekarang
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </View> */}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

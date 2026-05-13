@@ -12,7 +12,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useProfile } from "@hooks/useProfile";
-import { useAuth } from "@hooks/useAuth";
+import { useSignOut } from "@hooks/useAuth";
 import { ECard } from "@components/home/ECard";
 import { ECardFull } from "@components/profil/ECardFull";
 import { SkeletonBox, SkeletonText } from "@components/ui/Skeleton";
@@ -56,7 +56,7 @@ function MenuRow({ icon, label, onPress, danger }: MenuItem) {
 
 export default function ProfilScreen() {
   const { data: profile, isLoading } = useProfile();
-  const { signOut } = useAuth();
+  const signOut = useSignOut();
   const [eCardVisible, setECardVisible] = useState(false);
 
   const handleLogout = () => {

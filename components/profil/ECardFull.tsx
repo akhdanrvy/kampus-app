@@ -69,7 +69,7 @@ export function ECardFull({ profile, visible, onClose }: ECardFullProps) {
           {/* Student info */}
           <View style={styles.infoBlock}>
             <Text style={styles.nim}>
-              {profile.nim.replace(/(.{4})/g, "$1 ").trim()}
+              {profile.nim ? profile.nim.replace(/(.{4})/g, "$1 ").trim() : "— — — —"}
             </Text>
             <Text style={styles.name}>{profile.full_name}</Text>
             {profile.major && (

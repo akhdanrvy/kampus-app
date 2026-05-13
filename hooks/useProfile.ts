@@ -1,71 +1,85 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@lib/supabase";
 import { storage } from "@lib/mmkv";
 import { profileKeys } from "@constants/queryKeys";
-import { mockProfile } from "@lib/mockData";
 import type { Profile } from "../types/index";
-
-// TODO: Replace with Supabase query when backend is connected
-// import { supabase } from "@lib/supabase";
-// import { useAuthStore } from "@stores/authStore";
 
 const PROFILE_CACHE_KEY = "user_profile";
 
 // ---------------------------------------------------------------------------
-// useProfile — fetch the currently logged-in student's profile
+// useProfile
+//
+// Menggunakan getUser() bukan getSession() karena getUser() selalu
+// memverifikasi ke server Supabase — session lokal bisa stale atau kedaluwarsa
+// tanpa terdeteksi oleh getSession() yang hanya membaca dari storage lokal.
 // ---------------------------------------------------------------------------
 
-/**
- * useProfile fetches the profile row and caches it in MMKV.
- * Currently returns mock data — TODO: Replace with Supabase query.
- */
 export function useProfile() {
   return useQuery({
     queryKey: profileKeys.me(),
-    // Return MMKV-cached profile instantly while network fetch is in flight
-    placeholderData: () => storage.get<Profile>(PROFILE_CACHE_KEY) ?? undefined,
     queryFn: async (): Promise<Profile> => {
-      // TODO: Replace with Supabase query when connected:
-      // const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
-      // if (error) throw new Error(error.message);
-      // storage.set(PROFILE_CACHE_KEY, data as Profile);
-      // return data as Profile;
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("User tidak terautentikasi");
 
-      // Simulate a short network delay for realistic UX testing
-      await new Promise((r) => setTimeout(r, 300));
-      storage.set(PROFILE_CACHE_KEY, mockProfile);
-      return mockProfile;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+
+      // Simpan ke MMKV sebagai JSON string untuk offline fallback
+      storage.set(PROFILE_CACHE_KEY, JSON.stringify(data));
+      return data as Profile;
     },
+    placeholderData: (): Profile | undefined => {
+      try {
+        const cached = storage.get<string>(PROFILE_CACHE_KEY);
+        if (!cached) return undefined;
+        // storage.get sudah melakukan JSON.parse, tapi kita set dengan JSON.stringify
+        // sehingga perlu parse lagi jika hasilnya masih string
+        return (typeof cached === "string" ? JSON.parse(cached) : cached) as Profile;
+      } catch {
+        return undefined;
+      }
+    },
+    retry: 2,
+    staleTime: 1000 * 60 * 5, // 5 menit
   });
 }
 
 // ---------------------------------------------------------------------------
-// useUpdateProfile — update profile fields
+// useUpdateProfile
 // ---------------------------------------------------------------------------
 
-/**
- * useUpdateProfile wraps the UPDATE profiles mutation.
- * Currently updates mock data in MMKV only — TODO: Replace with Supabase mutation.
- */
 export function useUpdateProfile() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (updates: Partial<Profile>): Promise<Profile> => {
-      // TODO: Replace with Supabase mutation when connected:
-      // const { data, error } = await supabase.from("profiles").update(updates).eq("id", userId).select().single();
-      // if (error) throw new Error(error.message);
-      // return data as Profile;
+    mutationFn: async (updates: Partial<Pick<Profile, "full_name" | "phone" | "avatar_url">>): Promise<Profile> => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("User tidak terautentikasi");
 
-      await new Promise((r) => setTimeout(r, 500));
-      const cached = storage.get<Profile>(PROFILE_CACHE_KEY) ?? mockProfile;
-      const updated: Profile = { ...cached, ...updates, updated_at: new Date().toISOString() };
-      return updated;
+      const { data, error } = await (supabase as any)
+        .from("profiles")
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      storage.set(PROFILE_CACHE_KEY, JSON.stringify(data));
+      return data as Profile;
     },
-    onSuccess: (updated) => {
-      // Update MMKV immediately so offline reads are fresh
-      storage.set(PROFILE_CACHE_KEY, updated);
-      // Invalidate so any subscriber re-fetches
-      qc.invalidateQueries({ queryKey: profileKeys.me() });
+    onSuccess: (data) => {
+      // Langsung update cache TanStack Query agar UI reaktif tanpa refetch
+      queryClient.setQueryData(profileKeys.me(), data);
+      queryClient.invalidateQueries({ queryKey: profileKeys.me() });
     },
   });
 }
