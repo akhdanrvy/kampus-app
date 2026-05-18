@@ -1,43 +1,36 @@
-import * as SecureStore from "expo-secure-store";
 import { createClient } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Database } from "../types/database";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+// ---------------------------------------------------------------------------
+// SSR detection
+//
+// Expo Router 6 melakukan prerender/SSR di proses Metro (Node.js). Saat itu
+// `window` belum ada, sementara `createClient` dengan persistSession=true
+// langsung memanggil storage.getItem() pada saat init.
+//
+// AsyncStorage's web fallback mengakses window.localStorage → crash dengan
+// "window is not defined". Untuk SSR kita pakai no-op storage agar init
+// supabase tetap berjalan, dan auth state baru di-restore saat client
+// runtime mengeksekusi ulang modul ini di device/browser.
+// ---------------------------------------------------------------------------
+const isSSR = typeof window === "undefined";
 
-// Custom storage adapter using expo-secure-store for secure token persistence
-// Updated API for expo-secure-store v15.x - uses getItem/setItem/removeItem
-// SecureStore encrypts data using the device's secure enclave / keystore
-const ExpoSecureStoreAdapter = {
-  getItem: async (key: string): Promise<string | null> => {
-    try {
-      const value = await SecureStore.getItemAsync(key);
-      return value;
-    } catch {
-      return null;
-    }
-  },
-  setItem: async (key: string, value: string): Promise<void> => {
-    try {
-      await SecureStore.setItemAsync(key, value);
-    } catch (error) {
-      console.error(`Failed to set item ${key}:`, error);
-    }
-  },
-  removeItem: async (key: string): Promise<void> => {
-    try {
-      await SecureStore.deleteItemAsync(key);
-    } catch (error) {
-      console.error(`Failed to delete item ${key}:`, error);
-    }
-  },
+const ssrNoopStorage = {
+  getItem: async (_key: string): Promise<string | null> => null,
+  setItem: async (_key: string, _value: string): Promise<void> => {},
+  removeItem: async (_key: string): Promise<void> => {},
 };
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+export const supabase = createClient<Database>(
+  process.env.EXPO_PUBLIC_SUPABASE_URL!,
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      storage: isSSR ? ssrNoopStorage : AsyncStorage,
+      autoRefreshToken: !isSSR,
+      persistSession: !isSSR,
+      detectSessionInUrl: false,
+    },
+  }
+);

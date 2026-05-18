@@ -34,13 +34,19 @@ import { supabase } from "@lib/supabase";
 // ---------------------------------------------------------------------------
 
 export default function EditProfilScreen() {
-  const { data: profile, isLoading } = useProfile();
+  const { data: profile, isLoading: profileLoading } = useProfile();
   const { mutate: updateProfile, isPending } = useUpdateProfile();
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [newAvatarUri, setNewAvatarUri] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    console.log("=== Edit Profil Debug ===");
+    console.log("profile loaded:", profile);
+    console.log("========================");
+  }, [profile]);
 
   useEffect(() => {
     if (profile) {
@@ -73,7 +79,8 @@ export default function EditProfilScreen() {
   // ── Upload foto ke Supabase Storage ───────────────────────────────────────
 
   const uploadAvatar = async (uri: string): Promise<string> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) throw new Error("User tidak terautentikasi");
 
     const response = await fetch(uri);
@@ -151,6 +158,23 @@ export default function EditProfilScreen() {
   // Tampilkan preview foto baru (belum diupload) atau foto dari profil
   const avatarSource = newAvatarUri ?? profile?.avatar_url;
   const isBusy = isPending || isUploading;
+
+  if (profileLoading && !profile) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Profil</Text>
+          <View style={{ width: 22 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>

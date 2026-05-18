@@ -84,9 +84,8 @@ export function useAuth() {
       const role =
         (data.user?.user_metadata?.role as string) ?? "student";
       handleAuthSuccess(data.user.id, role, setAuth);
-      // Cache minimal user info — redirect dilakukan oleh auth guard di _layout.tsx
-      // yang bereaksi terhadap perubahan isAuthenticated via onAuthStateChange
-      storage.set("user_profile", { id: data.user.id, role });
+      // Jangan cache data partial di sini — useProfile.queryFn menangani cache
+      // dengan data lengkap dari tabel profiles setelah query berhasil.
     },
     onError: (error: Error) => {
       showAlert("Login Gagal", error.message);
@@ -194,9 +193,9 @@ export function useAuth() {
   // Get current user from active session
   // -------------------------------------------------------------------------
   const getCurrentUser = async () => {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getSession();
     if (error) return null;
-    return data.user;
+    return data.session?.user ?? null;
   };
 
   return {

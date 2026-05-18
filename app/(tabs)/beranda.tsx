@@ -5,7 +5,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
@@ -110,9 +110,15 @@ export default function BerandaScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: profile, isLoading: profileLoading } = useProfile();
+  const { data: profile, isLoading: profileLoading, isError: profileIsError, error: profileError } = useProfile();
   const { data: latestNews = [], isLoading: newsLoading } = useLatestNews(3);
   const { data: events = [], isLoading: eventsLoading } = useEvents();
+
+  useEffect(() => {
+    console.log("[Beranda] profile:", profile);
+    console.log("[Beranda] isLoading:", profileLoading);
+    console.log("[Beranda] isError:", profileIsError, profileError?.message);
+  }, [profile, profileLoading, profileIsError, profileError]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

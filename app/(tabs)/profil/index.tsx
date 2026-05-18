@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -55,9 +55,14 @@ function MenuRow({ icon, label, onPress, danger }: MenuItem) {
 // ---------------------------------------------------------------------------
 
 export default function ProfilScreen() {
-  const { data: profile, isLoading } = useProfile();
+  const { data: profile, isLoading, isError, error } = useProfile();
   const signOut = useSignOut();
   const [eCardVisible, setECardVisible] = useState(false);
+
+  useEffect(() => {
+    console.log("[Profil] profile:", profile);
+    console.log("[Profil] isLoading:", isLoading, "isError:", isError, error?.message);
+  }, [profile, isLoading, isError, error]);
 
   const handleLogout = () => {
     Alert.alert("Keluar", "Apakah kamu yakin ingin keluar dari akun ini?", [
