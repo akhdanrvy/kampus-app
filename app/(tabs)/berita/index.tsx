@@ -17,6 +17,7 @@ import { NewsCard } from "@components/news/NewsCard";
 import { NewsFilter } from "@components/news/NewsFilter";
 import { NewsListSkeleton } from "@components/news/NewsListSkeleton";
 import { EmptyState } from "@components/ui/EmptyState";
+import { FadeIn } from "@components/ui/Skeleton";
 import { Colors } from "@constants/colors";
 import { newsKeys } from "@constants/queryKeys";
 import type { NewsItem } from "../../../types/index";
@@ -70,7 +71,13 @@ export default function BeritaScreen() {
   );
 
   const handleArticlePress = useCallback((id: string) => {
-    router.push(`/berita/${id}`);
+    router.push({
+      pathname: "/(tabs)/berita/[id]",
+      params: {
+        id,
+        from: "/(tabs)/berita",
+      },
+    });
   }, []);
 
   // Load more when user scrolls to 30% from the end
@@ -109,7 +116,8 @@ export default function BeritaScreen() {
         <Text style={styles.headerTitle}>Berita & Pengumuman</Text>
       </View>
 
-      <FlashList
+      <FadeIn duration={220} style={{ flex: 1 }}>
+        <FlashList
         data={articles}
         keyExtractor={(item) => item.id}
         onEndReached={handleEndReached}
@@ -145,7 +153,8 @@ export default function BeritaScreen() {
         // Pull-to-refresh
         onRefresh={refetch}
         refreshing={isRefetching}
-      />
+        />
+      </FadeIn>
     </SafeAreaView>
   );
 }

@@ -43,7 +43,15 @@ function NewsCard({ item }: { item: NewsItem }) {
 
   return (
     <TouchableOpacity
-      onPress={() => router.push(`/(tabs)/berita/${item.id}` as any)}
+      onPress={() =>
+        router.push({
+          pathname: "/(tabs)/berita/[id]" as any,
+          params: {
+            id: item.id,
+            from: "/(tabs)/beranda",
+          },
+        })
+      }
       activeOpacity={0.75}
       style={{
         flexDirection: "row",

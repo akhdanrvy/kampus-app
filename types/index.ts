@@ -109,6 +109,22 @@ export interface Schedule {
 }
 
 // ---------------------------------------------------------------------------
+// Grades
+// ---------------------------------------------------------------------------
+
+export interface Grade {
+  id: string;
+  student_id: string;
+  course_name: string;
+  course_code?: string;
+  semester: string;
+  grade_letter: string;
+  grade_point: number;
+  credits: number;
+  academic_year: string;
+}
+
+// ---------------------------------------------------------------------------
 // Utility types
 // ---------------------------------------------------------------------------
 

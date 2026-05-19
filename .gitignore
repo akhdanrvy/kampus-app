@@ -40,3 +40,5 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+/MOBILE_DEVICE_AUDIT.md

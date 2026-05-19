@@ -5,14 +5,13 @@ import { Colors } from "@constants/colors";
 import { ScanTabButton } from "@components/ui/ScanTabButton";
 import { AnimatedTabIcon } from "@components/ui/AnimatedTabIcon";
 
-// Bottom tab navigator with 5 tabs.
-// The centre tab (SCAN) is elevated above the bar using a custom button component.
-// Regular tab icons use AnimatedTabIcon to scale up when focused.
 export default function TabsLayout() {
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
+        animation: "fade",
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
@@ -34,29 +33,37 @@ export default function TabsLayout() {
         options={{
           title: "Beranda",
           tabBarIcon: ({ color, size, focused }) => (
-            <AnimatedTabIcon name="home-outline" color={color} size={size} focused={focused} />
+            <AnimatedTabIcon
+              name="home-outline"
+              color={color}
+              size={size}
+              focused={focused}
+            />
           ),
         }}
       />
 
       <Tabs.Screen
-        name="berita/index"
+        name="berita"
         options={{
           title: "Berita",
           tabBarIcon: ({ color, size, focused }) => (
-            <AnimatedTabIcon name="newspaper-outline" color={color} size={size} focused={focused} />
+            <AnimatedTabIcon
+              name="newspaper-outline"
+              color={color}
+              size={size}
+              focused={focused}
+            />
           ),
         }}
       />
 
-      {/* Centre elevated scan tab */}
       <Tabs.Screen
         name="scan"
         options={{
           title: "SCAN",
           tabBarButton: (props) => <ScanTabButton {...props} />,
           tabBarIcon: () => (
-            // Icon is always white since the button background is primary colour
             <Ionicons name="qr-code-outline" size={26} color={Colors.white} />
           ),
           tabBarLabel: () => null,
@@ -68,24 +75,30 @@ export default function TabsLayout() {
         options={{
           title: "Akademik",
           tabBarIcon: ({ color, size, focused }) => (
-            <AnimatedTabIcon name="book-outline" color={color} size={size} focused={focused} />
+            <AnimatedTabIcon
+              name="book-outline"
+              color={color}
+              size={size}
+              focused={focused}
+            />
           ),
         }}
       />
 
       <Tabs.Screen
-        name="profil/index"
+        name="profil"
         options={{
           title: "Profil",
           tabBarIcon: ({ color, size, focused }) => (
-            <AnimatedTabIcon name="person-outline" color={color} size={size} focused={focused} />
+            <AnimatedTabIcon
+              name="person-outline"
+              color={color}
+              size={size}
+              focused={focused}
+            />
           ),
         }}
       />
-
-      {/* Hidden screens — not shown in tab bar */}
-      <Tabs.Screen name="berita/[id]" options={{ href: null }} />
-      <Tabs.Screen name="profil/edit" options={{ href: null }} />
     </Tabs>
   );
 }

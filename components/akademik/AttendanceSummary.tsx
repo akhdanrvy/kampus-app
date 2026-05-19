@@ -57,7 +57,7 @@ export function AttendanceSummary() {
       <Text style={styles.sectionTitle}>Rekap Kehadiran</Text>
       <Text style={styles.subtitle}>Semester ini (data mock)</Text>
 
-      <View style={{ gap: 14, marginTop: 12 }}>
+      <View style={{ marginTop: 12 }}>
         {MOCK_ATTENDANCE.map((item) => {
           const pct = Math.round((item.attended / item.total) * 100);
           const color =
@@ -89,7 +89,6 @@ export function AttendanceSummary() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
   },
@@ -110,6 +109,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     gap: 6,
+    marginBottom: 10,
   },
   itemHeader: {
     flexDirection: "row",

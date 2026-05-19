@@ -41,3 +41,8 @@ export const scheduleKeys = {
   byMajor: (major?: string, yearEntry?: number) =>
     [...scheduleKeys.all, "major", major, yearEntry] as const,
 };
+
+export const gradeKeys = {
+  all: ["grades"] as const,
+  list: (semester?: string) => [...gradeKeys.all, "list", semester ?? "all"] as const,
+};

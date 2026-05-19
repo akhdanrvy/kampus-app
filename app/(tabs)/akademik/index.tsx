@@ -1,58 +1,136 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import { TodaySchedule } from "@components/akademik/TodaySchedule";
 import { ScheduleCard } from "@components/akademik/ScheduleCard";
 import { AttendanceSummary } from "@components/akademik/AttendanceSummary";
+import { GradeCard } from "@components/akademik/GradeCard";
+import { IPKSummary } from "@components/akademik/IPKSummary";
 import { EmptyState } from "@components/ui/EmptyState";
-import { SkeletonBox } from "@components/ui/Skeleton";
+import { FadeIn, SkeletonBox } from "@components/ui/Skeleton";
 import { Colors } from "@constants/colors";
 import { getDayName, formatDate, formatTime } from "@lib/utils";
 import { useSchedule, isScheduleNow } from "@hooks/useSchedule";
 import { useProfile } from "@hooks/useProfile";
 import { useTodayAttendance } from "@hooks/useAttendance";
+import { useGrades, calculateIPK } from "@hooks/useGrades";
+import type { Grade } from "../../../types/index";
 
-// ---------------------------------------------------------------------------
-// AkademikScreen
-// ---------------------------------------------------------------------------
+type ActiveTab = "jadwal" | "absensi" | "nilai";
 
-type ActiveTab = "jadwal" | "absensi";
+const TAB_LABELS: Record<ActiveTab, string> = {
+  jadwal: "Jadwal",
+  absensi: "Absensi",
+  nilai: "Nilai",
+};
+
+function sortSemesters(semesters: string[]) {
+  return [...semesters].sort((a, b) =>
+    b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" })
+  );
+}
+
+function totalCredits(grades: Grade[]) {
+  return grades.reduce((sum, grade) => sum + grade.credits, 0);
+}
+
+function GradeListSkeleton() {
+  return (
+    <>
+      <SkeletonBox height={156} borderRadius={16} style={{ marginBottom: 16 }} />
+      <SkeletonBox height={52} borderRadius={12} style={{ marginBottom: 16 }} />
+      {[0, 1, 2].map((i) => (
+        <SkeletonBox
+          key={i}
+          height={92}
+          borderRadius={12}
+          style={{ marginBottom: 10 }}
+        />
+      ))}
+    </>
+  );
+}
+
+function isValidTab(value: unknown): value is ActiveTab {
+  return value === "jadwal" || value === "absensi" || value === "nilai";
+}
 
 export default function AkademikScreen() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("jadwal");
+  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    isValidTab(requestedTab) ? requestedTab : "jadwal"
+  );
+  const [selectedSemester, setSelectedSemester] = useState<string | undefined>();
+  const [semesterInitialized, setSemesterInitialized] = useState(false);
+  const [semesterModalVisible, setSemesterModalVisible] = useState(false);
+
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: allSchedules = [], isLoading: scheduleLoading } = useSchedule();
   const { data: todayAttendance = [], isLoading: attendanceLoading } = useTodayAttendance();
+  const { data: allGrades = [], isLoading: allGradesLoading } = useGrades();
+  const { data: filteredGrades = [], isLoading: filteredGradesLoading } =
+    useGrades(selectedSemester);
+
+  const semesterOptions = sortSemesters(
+    Array.from(new Set(allGrades.map((grade) => grade.semester).filter(Boolean)))
+  );
+
+  useEffect(() => {
+    if (isValidTab(requestedTab) && requestedTab !== activeTab) {
+      setActiveTab(requestedTab);
+    }
+  }, [activeTab, requestedTab]);
+
+  useEffect(() => {
+    if (!semesterInitialized && semesterOptions.length > 0) {
+      setSelectedSemester(semesterOptions[0]);
+      setSemesterInitialized(true);
+    }
+
+    if (!semesterInitialized && !allGradesLoading && semesterOptions.length === 0) {
+      setSemesterInitialized(true);
+    }
+  }, [allGradesLoading, semesterInitialized, semesterOptions]);
+
+  const grades = selectedSemester ? filteredGrades : allGrades;
+  const gradesLoading =
+    allGradesLoading || (!!selectedSemester && filteredGradesLoading);
 
   const scheduleByDay = allSchedules.reduce<Record<number, typeof allSchedules>>(
-    (acc, s) => {
-      acc[s.day_of_week] = [...(acc[s.day_of_week] ?? []), s];
+    (acc, schedule) => {
+      acc[schedule.day_of_week] = [...(acc[schedule.day_of_week] ?? []), schedule];
       return acc;
     },
     {}
   );
-  const sortedDays = Object.keys(scheduleByDay).map(Number).sort((a, b) => a - b);
+  const sortedDays = Object.keys(scheduleByDay)
+    .map(Number)
+    .sort((a, b) => a - b);
 
   const noMajor = !profileLoading && !profile?.major;
+  const gradeSemesterLabel = selectedSemester ?? "Semua Semester";
+  const gradeTotalCredits = totalCredits(grades);
+  const gradeIpk = calculateIPK(grades);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Akademik</Text>
       </View>
 
-      {/* Segmented control */}
       <View style={styles.segmentContainer}>
-        {(["jadwal", "absensi"] as ActiveTab[]).map((tab) => (
+        {(["jadwal", "absensi", "nilai"] as ActiveTab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.segment, activeTab === tab && styles.segmentActive]}
@@ -64,7 +142,7 @@ export default function AkademikScreen() {
                 activeTab === tab && styles.segmentLabelActive,
               ]}
             >
-              {tab === "jadwal" ? "Jadwal" : "Absensi"}
+              {TAB_LABELS[tab]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -74,12 +152,11 @@ export default function AkademikScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
+        <FadeIn duration={220}>
         {activeTab === "jadwal" ? (
           <>
-            {/* Jadwal hari ini */}
             <TodaySchedule />
 
-            {/* EmptyState jika major belum diisi di profil */}
             {noMajor ? (
               <View style={{ paddingHorizontal: 16 }}>
                 <EmptyState
@@ -91,7 +168,6 @@ export default function AkademikScreen() {
                 />
               </View>
             ) : (
-              /* Jadwal mingguan */
               <View style={styles.weekSection}>
                 <Text style={styles.weekTitle}>Jadwal Minggu Ini</Text>
 
@@ -117,11 +193,11 @@ export default function AkademikScreen() {
                   sortedDays.map((day) => (
                     <View key={day}>
                       <Text style={styles.dayLabel}>{getDayName(day)}</Text>
-                      {scheduleByDay[day].map((s) => (
+                      {scheduleByDay[day].map((schedule) => (
                         <ScheduleCard
-                          key={s.id}
-                          schedule={s}
-                          isNow={isScheduleNow(s)}
+                          key={schedule.id}
+                          schedule={schedule}
+                          isNow={isScheduleNow(schedule)}
                         />
                       ))}
                     </View>
@@ -129,10 +205,8 @@ export default function AkademikScreen() {
               </View>
             )}
           </>
-        ) : (
-          /* Tab Absensi */
+        ) : activeTab === "absensi" ? (
           <View style={styles.attendanceSection}>
-            {/* Riwayat absensi hari ini */}
             <Text style={styles.sectionTitle}>Kehadiran Hari Ini</Text>
 
             {attendanceLoading ? (
@@ -145,20 +219,8 @@ export default function AkademikScreen() {
                 />
               ))
             ) : todayAttendance.length === 0 ? (
-              <View
-                style={{
-                  backgroundColor: Colors.white,
-                  borderRadius: 12,
-                  padding: 20,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: Colors.border,
-                  marginBottom: 24,
-                }}
-              >
-                <Text style={{ color: Colors.textMuted, fontSize: 13 }}>
-                  Belum ada absensi hari ini.
-                </Text>
+              <View style={styles.emptyInlineCard}>
+                <Text style={styles.emptyInlineText}>Belum ada absensi hari ini.</Text>
               </View>
             ) : (
               todayAttendance.map(({ record, session }) => {
@@ -173,10 +235,10 @@ export default function AkademikScreen() {
                     />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.courseLabel} numberOfLines={1}>
-                        {session?.course_name ?? session?.title ?? "—"}
+                        {session?.course_name ?? session?.title ?? "-"}
                       </Text>
                       <Text style={styles.timeLabel}>
-                        {formatTime(record.scanned_at)} · {formatDate(record.scanned_at)}
+                        {formatTime(record.scanned_at)} - {formatDate(record.scanned_at)}
                       </Text>
                     </View>
                     <View
@@ -199,18 +261,110 @@ export default function AkademikScreen() {
               })
             )}
 
-            {/* Rekap per mata kuliah (semester) */}
             <AttendanceSummary />
           </View>
+        ) : (
+          <View style={styles.gradesSection}>
+            {gradesLoading ? (
+              <GradeListSkeleton />
+            ) : allGrades.length === 0 ? (
+              <EmptyState
+                emoji="📝"
+                title="Belum Ada Nilai"
+                subtitle="Nilai mata kuliah kamu akan muncul di sini setelah diinput oleh kampus."
+              />
+            ) : (
+              <>
+                <IPKSummary
+                  ipk={gradeIpk}
+                  semesterLabel={gradeSemesterLabel}
+                  totalCredits={gradeTotalCredits}
+                  totalCourses={grades.length}
+                />
+
+                <View style={styles.filterCard}>
+                  <Text style={styles.filterLabel}>Filter Semester</Text>
+                  <TouchableOpacity
+                    style={styles.filterButton}
+                    onPress={() => setSemesterModalVisible(true)}
+                  >
+                    <Text style={styles.filterButtonText}>{gradeSemesterLabel}</Text>
+                    <Text style={styles.filterButtonChevron}>v</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {grades.length === 0 ? (
+                  <EmptyState
+                    emoji="📚"
+                    title="Nilai Tidak Ditemukan"
+                    subtitle="Belum ada nilai untuk semester yang kamu pilih."
+                  />
+                ) : (
+                  grades.map((grade) => <GradeCard key={grade.id} grade={grade} />)
+                )}
+              </>
+            )}
+          </View>
         )}
+        </FadeIn>
       </ScrollView>
+
+      <Modal
+        visible={semesterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSemesterModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setSemesterModalVisible(false)}
+        >
+          <Pressable style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Pilih Semester</Text>
+
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => {
+                setSelectedSemester(undefined);
+                setSemesterInitialized(true);
+                setSemesterModalVisible(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.modalOptionText,
+                  !selectedSemester && styles.modalOptionTextActive,
+                ]}
+              >
+                Semua Semester
+              </Text>
+            </TouchableOpacity>
+
+            {semesterOptions.map((semester) => (
+              <TouchableOpacity
+                key={semester}
+                style={styles.modalOption}
+                onPress={() => {
+                  setSelectedSemester(semester);
+                  setSemesterModalVisible(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    selectedSemester === semester && styles.modalOptionTextActive,
+                  ]}
+                >
+                  {semester}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
@@ -263,6 +417,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   attendanceSection: { paddingHorizontal: 16, paddingTop: 8 },
+  gradesSection: { paddingHorizontal: 16, paddingTop: 8 },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
@@ -281,6 +436,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  emptyInlineCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 24,
+  },
+  emptyInlineText: {
+    color: Colors.textMuted,
+    fontSize: 13,
+  },
   statusDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   courseLabel: {
     fontSize: 13,
@@ -294,4 +462,66 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   statusText: { fontSize: 11, fontWeight: "700" },
+  filterCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    marginBottom: 8,
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    backgroundColor: "#F8FAFC",
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  filterButtonChevron: {
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  modalOption: {
+    paddingVertical: 12,
+  },
+  modalOptionText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+  },
+  modalOptionTextActive: {
+    color: Colors.primary,
+    fontWeight: "700",
+  },
 });

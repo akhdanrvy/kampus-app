@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,7 +16,7 @@ import { useProfile } from "@hooks/useProfile";
 import { useSignOut } from "@hooks/useAuth";
 import { ECard } from "@components/home/ECard";
 import { ECardFull } from "@components/profil/ECardFull";
-import { SkeletonBox, SkeletonText } from "@components/ui/Skeleton";
+import { FadeIn, SkeletonBox, SkeletonText } from "@components/ui/Skeleton";
 import { Colors } from "@constants/colors";
 import { generateInitials } from "@lib/utils";
 
@@ -65,6 +66,14 @@ export default function ProfilScreen() {
   }, [profile, isLoading, isError, error]);
 
   const handleLogout = () => {
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm("Apakah kamu yakin ingin keluar dari akun ini?");
+      if (confirmed) {
+        signOut.mutate();
+      }
+      return;
+    }
+
     Alert.alert("Keluar", "Apakah kamu yakin ingin keluar dari akun ini?", [
       { text: "Batal", style: "cancel" },
       {
@@ -83,6 +92,7 @@ export default function ProfilScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
+        <FadeIn duration={220}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profil</Text>
@@ -143,7 +153,12 @@ export default function ProfilScreen() {
             <MenuRow
               icon="person-outline"
               label="Edit Profil"
-              onPress={() => router.push("/profil/edit")}
+              onPress={() =>
+                router.push({
+                  pathname: "/profil/edit",
+                  params: { from: "/(tabs)/profil" },
+                })
+              }
             />
             <View style={styles.divider} />
             <MenuRow
@@ -161,7 +176,12 @@ export default function ProfilScreen() {
             <MenuRow
               icon="information-circle-outline"
               label="Tentang Aplikasi"
-              onPress={() => {}}
+              onPress={() =>
+                router.push({
+                  pathname: "/profil/about",
+                  params: { from: "/(tabs)/profil" },
+                })
+              }
             />
             <View style={styles.divider} />
             <MenuRow
@@ -172,6 +192,7 @@ export default function ProfilScreen() {
             />
           </View>
         </View>
+        </FadeIn>
       </ScrollView>
 
       {/* Fullscreen E-Card modal */}

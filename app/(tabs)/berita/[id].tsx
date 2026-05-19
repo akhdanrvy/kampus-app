@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useNewsDetail } from "@hooks/useNews";
 import { Badge } from "@components/ui/Badge";
-import { SkeletonBox, SkeletonText } from "@components/ui/Skeleton";
+import { FadeIn, SkeletonBox, SkeletonText } from "@components/ui/Skeleton";
 import { Colors } from "@constants/colors";
 import { APP_NAME } from "@constants/config";
 import { formatDate } from "@lib/utils";
@@ -41,8 +41,23 @@ function DetailSkeleton() {
 // ---------------------------------------------------------------------------
 
 export default function BeritaDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string | string[] }>();
+  const origin = Array.isArray(from) ? from[0] : from;
   const { data: article, isLoading, isError } = useNewsDetail(id ?? "");
+
+  const handleBack = () => {
+    if (origin) {
+      router.replace(origin as any);
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/(tabs)/berita");
+  };
 
   const handleShare = async () => {
     if (!article) return;
@@ -61,7 +76,7 @@ export default function BeritaDetailScreen() {
       {/* Custom back header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={handleBack}
           style={styles.backButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -92,12 +107,13 @@ export default function BeritaDetailScreen() {
         <View style={styles.errorState}>
           <Ionicons name="alert-circle-outline" size={48} color={Colors.textMuted} />
           <Text style={styles.errorText}>Artikel tidak ditemukan</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <TouchableOpacity onPress={handleBack} style={styles.backLink}>
             <Text style={{ color: Colors.primary, fontWeight: "600" }}>← Kembali</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+        <FadeIn duration={220} style={{ flex: 1 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
           {article.thumbnail_url ? (
             <Image
               source={{ uri: article.thumbnail_url }}
@@ -129,7 +145,8 @@ export default function BeritaDetailScreen() {
               <Text style={styles.shareLabel}>Bagikan artikel ini</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+          </ScrollView>
+        </FadeIn>
       )}
     </SafeAreaView>
   );

@@ -3,9 +3,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@constants/colors";
 
-// ---------------------------------------------------------------------------
-// Data
-// ---------------------------------------------------------------------------
+type AkademikTab = "jadwal" | "absensi" | "nilai";
 
 type QuickActionItem = {
   id: string;
@@ -13,6 +11,7 @@ type QuickActionItem = {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   route: string;
+  params?: Record<string, string>;
 };
 
 const ACTIONS: QuickActionItem[] = [
@@ -22,6 +21,7 @@ const ACTIONS: QuickActionItem[] = [
     label: "Jadwal",
     icon: "calendar-outline",
     route: "/(tabs)/akademik",
+    params: { tab: "jadwal" satisfies AkademikTab },
   },
   {
     id: "ecard",
@@ -36,6 +36,7 @@ const ACTIONS: QuickActionItem[] = [
     label: "Absensi",
     icon: "checkmark-circle-outline",
     route: "/(tabs)/akademik",
+    params: { tab: "absensi" satisfies AkademikTab },
   },
   {
     id: "nilai",
@@ -43,6 +44,7 @@ const ACTIONS: QuickActionItem[] = [
     label: "Nilai",
     icon: "bar-chart-outline",
     route: "/(tabs)/akademik",
+    params: { tab: "nilai" satisfies AkademikTab },
   },
 ];
 
@@ -62,7 +64,12 @@ export function QuickActions() {
       {ACTIONS.map((item) => (
         <TouchableOpacity
           key={item.id}
-          onPress={() => router.push(item.route as any)}
+          onPress={() =>
+            router.push({
+              pathname: item.route as any,
+              params: item.params,
+            })
+          }
           activeOpacity={0.7}
           style={{
             flex: 1,

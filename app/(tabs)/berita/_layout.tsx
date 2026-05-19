@@ -1,0 +1,18 @@
+import { Stack } from "expo-router";
+
+export default function BeritaLayout() {
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "ios_from_right",
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+        animationDuration: 220,
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="[id]" />
+    </Stack>
+  );
+}

@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Alert,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -12,16 +11,18 @@ import {
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
 import { useProfile, useUpdateProfile } from "@hooks/useProfile";
 import { Input } from "@components/ui/Input";
 import { Button } from "@components/ui/Button";
+import { FadeIn } from "@components/ui/Skeleton";
 import { Colors } from "@constants/colors";
 import { generateInitials } from "@lib/utils";
 import { supabase } from "@lib/supabase";
+import { useUIStore } from "@stores/uiStore";
 
 // ---------------------------------------------------------------------------
 // EditProfilScreen
@@ -34,19 +35,16 @@ import { supabase } from "@lib/supabase";
 // ---------------------------------------------------------------------------
 
 export default function EditProfilScreen() {
+  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const from = Array.isArray(params.from) ? params.from[0] : params.from;
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { mutate: updateProfile, isPending } = useUpdateProfile();
+  const showToast = useUIStore((s) => s.showToast);
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [newAvatarUri, setNewAvatarUri] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  useEffect(() => {
-    console.log("=== Edit Profil Debug ===");
-    console.log("profile loaded:", profile);
-    console.log("========================");
-  }, [profile]);
 
   useEffect(() => {
     if (profile) {
@@ -55,12 +53,29 @@ export default function EditProfilScreen() {
     }
   }, [profile]);
 
+  const handleBack = () => {
+    if (from) {
+      router.replace(from as any);
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/(tabs)/profil");
+  };
+
   // ── Pilih foto dari galeri ─────────────────────────────────────────────────
 
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Izin Diperlukan", "Akses galeri diperlukan untuk mengganti foto profil.");
+      showToast({
+        type: "info",
+        message: "Akses galeri diperlukan untuk mengganti foto profil.",
+      });
       return;
     }
 
@@ -111,7 +126,10 @@ export default function EditProfilScreen() {
 
   const handleSave = async () => {
     if (!fullName.trim()) {
-      Alert.alert("Validasi", "Nama tidak boleh kosong.");
+      showToast({
+        type: "error",
+        message: "Nama tidak boleh kosong.",
+      });
       return;
     }
 
@@ -133,24 +151,32 @@ export default function EditProfilScreen() {
         },
         {
           onSuccess: () => {
-            Alert.alert("Berhasil", "Profil berhasil diperbarui.", [
-              { text: "OK", onPress: () => router.back() },
-            ]);
+            showToast({
+              type: "success",
+              message: "Profil berhasil diperbarui.",
+            });
+            handleBack();
           },
           onError: (err) => {
-            Alert.alert(
-              "Gagal",
-              err instanceof Error ? err.message : "Gagal menyimpan perubahan. Coba lagi."
-            );
+            showToast({
+              type: "error",
+              message:
+                err instanceof Error
+                  ? err.message
+                  : "Gagal menyimpan perubahan. Coba lagi.",
+              duration: 4000,
+            });
           },
         }
       );
     } catch (err) {
       setIsUploading(false);
-      Alert.alert(
-        "Upload Gagal",
-        err instanceof Error ? err.message : "Tidak dapat mengupload foto."
-      );
+      showToast({
+        type: "error",
+        message:
+          err instanceof Error ? err.message : "Tidak dapat mengupload foto.",
+        duration: 4000,
+      });
     }
   };
 
@@ -163,7 +189,7 @@ export default function EditProfilScreen() {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={handleBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Edit Profil</Text>
@@ -180,7 +206,7 @@ export default function EditProfilScreen() {
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={handleBack}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
@@ -197,6 +223,7 @@ export default function EditProfilScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          <FadeIn duration={220}>
           {/* Avatar */}
           <View style={styles.avatarSection}>
             <TouchableOpacity
@@ -237,7 +264,13 @@ export default function EditProfilScreen() {
               value={fullName}
               onChangeText={setFullName}
               placeholder="Masukkan nama lengkap"
-              leftIcon="person-outline"
+              leftIcon={
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={Colors.textMuted}
+                />
+              }
               autoCapitalize="words"
             />
 
@@ -246,7 +279,13 @@ export default function EditProfilScreen() {
               value={phone}
               onChangeText={setPhone}
               placeholder="08xx-xxxx-xxxx"
-              leftIcon="call-outline"
+              leftIcon={
+                <Ionicons
+                  name="call-outline"
+                  size={18}
+                  color={Colors.textMuted}
+                />
+              }
               keyboardType="phone-pad"
             />
           </View>
@@ -274,6 +313,7 @@ export default function EditProfilScreen() {
               loading={isBusy}
             />
           </View>
+          </FadeIn>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
