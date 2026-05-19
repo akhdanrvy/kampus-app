@@ -10,6 +10,7 @@ npx expo install \
   expo-constants \
   expo-linking \
   expo-status-bar \
+  expo-dev-client \
   expo-font \
   expo-secure-store \
   expo-camera \

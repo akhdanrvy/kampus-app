@@ -14,3 +14,7 @@ export const NEWS_EXCERPT_MAX_LENGTH = 120;
 
 /** Number of news items to fetch per page (infinite scroll) */
 export const NEWS_PAGE_SIZE = 10;
+
+/** Temporary auth feature flags while mobile login flow is narrowed for device QA */
+export const ENABLE_GOOGLE_OAUTH = false;
+export const ENABLE_PASSWORD_RESET = false;

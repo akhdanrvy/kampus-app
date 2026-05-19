@@ -6,6 +6,7 @@ import { supabase } from "@lib/supabase";
 import { storage } from "@lib/mmkv";
 import { useAuthStore } from "@stores/authStore";
 import { queryClient } from "@lib/queryClient";
+import { ENABLE_GOOGLE_OAUTH, ENABLE_PASSWORD_RESET } from "@constants/config";
 
 /** Cross-platform alert — uses Alert.alert on native, window.alert on web */
 function showAlert(title: string, message: string) {
@@ -139,11 +140,14 @@ export function useAuth() {
   // -------------------------------------------------------------------------
   const signInWithGoogle = useMutation({
     mutationFn: async () => {
+      if (!ENABLE_GOOGLE_OAUTH) {
+        throw new Error("Login Google belum diaktifkan di build ini.");
+      }
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           // Deep link scheme defined in app.json
-          redirectTo: "kampus-app://auth/callback",
+          redirectTo: "kampus-go://auth/callback",
         },
       });
       if (error) throw error;
@@ -179,8 +183,11 @@ export function useAuth() {
   // -------------------------------------------------------------------------
   const resetPassword = useMutation({
     mutationFn: async (email: string) => {
+      if (!ENABLE_PASSWORD_RESET) {
+        throw new Error("Reset password belum diaktifkan di build ini.");
+      }
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "kampus-app://auth/reset-password",
+        redirectTo: "kampus-go://auth/reset-password",
       });
       if (error) throw error;
     },

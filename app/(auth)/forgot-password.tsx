@@ -16,6 +16,7 @@ import { useAuth } from "@hooks/useAuth";
 import { Button } from "@components/ui/Button";
 import { Input } from "@components/ui/Input";
 import { Colors } from "@constants/colors";
+import { ENABLE_PASSWORD_RESET } from "@constants/config";
 
 /**
  * Forgot Password Screen
@@ -49,6 +50,91 @@ export default function ForgotPasswordScreen() {
       onSuccess: () => setIsSuccess(true),
     });
   };
+
+  if (!ENABLE_PASSWORD_RESET) {
+    return (
+      <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.white }}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: Colors.border,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => router.back()}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginRight: 12 }}
+              >
+                <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: Colors.textPrimary }}>
+                Lupa Kata Sandi
+              </Text>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                paddingHorizontal: 24,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 88,
+                  height: 88,
+                  borderRadius: 44,
+                  backgroundColor: "#FEF3C7",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <Ionicons name="time-outline" size={44} color={Colors.accent} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: "700",
+                  color: Colors.textPrimary,
+                  marginBottom: 8,
+                }}
+              >
+                Fitur Belum Aktif
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: Colors.textMuted,
+                  textAlign: "center",
+                  lineHeight: 20,
+                  marginBottom: 24,
+                }}
+              >
+                Reset password sengaja dinonaktifkan sementara selama audit device.
+                Gunakan akun yang dibuat dari panel admin.
+              </Text>
+              <Button
+                title="Kembali ke Login"
+                onPress={() => router.replace("/(auth)/login")}
+                fullWidth
+              />
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>

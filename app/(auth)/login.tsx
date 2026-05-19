@@ -19,6 +19,7 @@ import { useAuth } from "@hooks/useAuth";
 import { Button } from "@components/ui/Button";
 import { Input } from "@components/ui/Input";
 import { Colors } from "@constants/colors";
+import { ENABLE_GOOGLE_OAUTH, ENABLE_PASSWORD_RESET } from "@constants/config";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -191,14 +192,18 @@ export default function LoginScreen() {
               />
 
               {/* Forgot password link */}
-              <TouchableOpacity
-                onPress={() => router.push("/(auth)/forgot-password")}
-                style={{ alignSelf: "flex-end", marginTop: -4, marginBottom: 24 }}
-              >
-                <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: "500" }}>
-                  Lupa Kata Sandi?
-                </Text>
-              </TouchableOpacity>
+              {ENABLE_PASSWORD_RESET ? (
+                <TouchableOpacity
+                  onPress={() => router.push("/(auth)/forgot-password")}
+                  style={{ alignSelf: "flex-end", marginTop: -4, marginBottom: 24 }}
+                >
+                  <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: "500" }}>
+                    Lupa Kata Sandi?
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ marginBottom: 24 }} />
+              )}
 
               {/* Submit button */}
               <Button
@@ -210,35 +215,39 @@ export default function LoginScreen() {
               />
 
               {/* Divider */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginVertical: 20,
-                }}
-              >
-                <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
-                <Text style={{ marginHorizontal: 12, color: Colors.textMuted, fontSize: 13 }}>
-                  atau
-                </Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
-              </View>
+              {ENABLE_GOOGLE_OAUTH && (
+                <>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginVertical: 20,
+                    }}
+                  >
+                    <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
+                    <Text style={{ marginHorizontal: 12, color: Colors.textMuted, fontSize: 13 }}>
+                      atau
+                    </Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
+                  </View>
 
-              {/* Google sign in */}
-              <Button
-                title="Masuk dengan Google"
-                onPress={handleGoogle}
-                variant="outlined"
-                fullWidth
-                loading={signInWithGoogle.isPending}
-                disabled={signInWithGoogle.isPending}
-                leftIcon={
-                  // Simple "G" letter as a proxy — replace with actual Google SVG logo later
-                  <Text style={{ fontWeight: "700", fontSize: 16, color: "#EA4335" }}>
-                    G
-                  </Text>
-                }
-              />
+                  {/* Google sign in */}
+                  <Button
+                    title="Masuk dengan Google"
+                    onPress={handleGoogle}
+                    variant="outlined"
+                    fullWidth
+                    loading={signInWithGoogle.isPending}
+                    disabled={signInWithGoogle.isPending}
+                    leftIcon={
+                      // Simple "G" letter as a proxy — replace with actual Google SVG logo later
+                      <Text style={{ fontWeight: "700", fontSize: 16, color: "#EA4335" }}>
+                        G
+                      </Text>
+                    }
+                  />
+                </>
+              )}
               <View
                 style={{
                   marginTop: 20,
